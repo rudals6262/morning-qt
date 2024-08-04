@@ -1,19 +1,14 @@
 {
   "name": "rd-project",
   "version": "1.0.0",
-  "description": "\"# morning-qt\"",
+  "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo 'Running build script'"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2",
-    "mysql": "^2.18.1",
-    "mysql2": "^3.11.0",
-    "sqlite3": "^5.1.7"
+    "express": "^4.17.1",
+    "sqlite3": "^5.0.2"
   }
 }

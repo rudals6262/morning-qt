@@ -2,10 +2,10 @@
   "name": "rd-project",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "echo 'Running build script'"
+    "build": "echo 'Build step not needed for static files'"
   },
   "dependencies": {
     "express": "^4.17.1",

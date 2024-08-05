@@ -1,19 +1,121 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-exports.handler = async (event, context) => {
-  const db = new sqlite3.Database(path.join(__dirname, 'bible.db'));
-  const references = event.queryStringParameters.references.split(',');
-  
-  // 여기에 기존 server.js의 쿼리 로직을 넣습니다.
-  // 주의: 비동기 작업을 위해 Promise를 사용해야 합니다.
+// 데이터베이스 연결
+const db = new sqlite3.Database(path.join(__dirname, '..', '..', 'database', 'bible.db'));
 
-  return new Promise((resolve, reject) => {
-    // 쿼리 로직 실행
-    // 결과를 처리한 후 resolve 호출
-    resolve({
-      statusCode: 200,
-      body: JSON.stringify(results)
+exports.handler = async (event, context) => {
+    // CORS 헤더 설정
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    };
+
+    // OPTIONS 요청 처리 (CORS 프리플라이트)
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers,
+            body: ''
+        };
+    }
+
+    if (event.httpMethod !== 'GET') {
+        return {
+            statusCode: 405,
+            headers,
+            body: JSON.stringify({ error: 'Method Not Allowed' })
+        };
+    }
+
+    const references = event.queryStringParameters.references.split(',');
+    const queries = references.map(ref => {
+        const match = ref.match(/^\[(\D+)(\d+)(?::(\d+)(?:-(\d+))?)?\]$/);
+        if (!match) return null;
+
+        const short_label = match[1];
+        const chapter = parseInt(match[2], 10);
+        const startParagraph = match[3] ? parseInt(match[3], 10) : null;
+        const endParagraph = match[4] ? parseInt(match[4], 10) : startParagraph;
+
+        return { short_label, chapter, startParagraph, endParagraph };
     });
-  });
+
+    if (queries.some(q => q === null)) {
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: '잘못된 참조 형식' })
+        };
+    }
+
+    try {
+        const results = await Promise.all(queries.map(async ({ short_label, chapter, startParagraph, endParagraph }) => {
+            let sql, params;
+
+            if (startParagraph === null) {
+                sql = `
+                    SELECT chapter, paragraph, sentence, long_label 
+                    FROM bible2 
+                    WHERE short_label = ? AND chapter = ?
+                    ORDER BY paragraph
+                `;
+                params = [short_label, chapter];
+            } else {
+                sql = `
+                    SELECT chapter, paragraph, sentence, long_label 
+                    FROM bible2 
+                    WHERE short_label = ? AND chapter = ? AND paragraph BETWEEN ? AND ?
+                    ORDER BY paragraph
+                `;
+                params = [short_label, chapter, startParagraph, endParagraph];
+            }
+
+            return new Promise((resolve, reject) => {
+                db.all(sql, params, (err, rows) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    const long_label = rows.length > 0 ? rows[0].long_label : '';
+                    const refDisplay = startParagraph === null 
+                    ? `[${long_label} ${chapter}장]` 
+                    : `[${short_label}${chapter}:${startParagraph}${endParagraph !== startParagraph ? `-${endParagraph}` : ''}]`;
+                           
+                    resolve({ 
+                        ref: refDisplay, 
+                        rows, 
+                        short_label, 
+                        chapter,
+                        copyRef: `[${short_label}${chapter}]`
+                    });
+                });
+            });
+        }));
+
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify(results)
+        };
+    } catch (error) {
+        console.error('쿼리 실행 오류:', error);
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: '서버 오류', details: error.message })
+        };
+    }
 };
+
+// 프로세스 종료 시 데이터베이스 연결 닫기
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error(err.message);
+        }
+        console.log('Database connection closed.');
+        process.exit(0);
+    });
+});

@@ -1,12 +1,21 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
 const db = new sqlite3.Database('bible.db');
 
+// CORS 설정
+app.use(cors());
+
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));
+
+// 루트 경로 처리
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // API 엔드포인트
 app.get('/api/texts', (req, res) => {
@@ -87,8 +96,30 @@ app.get('/api/texts', (req, res) => {
         });
 });
 
+// 404 에러 처리
+app.use((req, res, next) => {
+    res.status(404).send("Sorry, that route doesn't exist.");
+});
+
+// 오류 처리 미들웨어
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
 // 서버 실행
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+// 프로세스 종료 시 데이터베이스 연결 닫기
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error(err.message);
+        }
+        console.log('Database connection closed.');
+        process.exit(0);
+    });
 });

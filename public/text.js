@@ -12,7 +12,7 @@ window.addEventListener('load', function() {
     }
 
     // API 호출하여 데이터 가져오기
-    fetch(`/.netlify/functions/api?references=${encodeURIComponent(parsedRefs.join(','))}`)
+    fetch('/.netlify/functions/api?references=' + encodeURIComponent(references))
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('text');

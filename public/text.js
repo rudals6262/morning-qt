@@ -3,7 +3,7 @@ function parseReferences(refs) {
 }
 
 window.addEventListener('load', function() {
-    const references = "[창1:2-4], [창2:3], [창30], [시119], [벧후1]"; // 변경할 수 있는 구절 참조
+    const references = "[창1:2-4], [창2:3], [창30], [시119], [벧후1]";
     const parsedRefs = parseReferences(references);
 
     if (parsedRefs.length === 0) {
@@ -13,8 +13,17 @@ window.addEventListener('load', function() {
 
     // API 호출하여 데이터 가져오기
     fetch('/.netlify/functions/api?references=' + encodeURIComponent(references))
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok ' + response.statusText);
+            }
+            return response.json();
+        })
         .then(data => {
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid data format received');
+            }
+
             const container = document.getElementById('text');
             container.innerHTML = data.map(({ ref, rows, copyRef }) => {
                 const shortLabelMatch = ref.match(/^\[(\D+)(\d+)/);

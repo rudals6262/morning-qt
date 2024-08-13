@@ -5,14 +5,12 @@ const path = require('path');
 const db = new sqlite3.Database(path.join(__dirname, '..', '..', 'database', 'bible.db'));
 
 exports.handler = async (event, context) => {
-    // CORS 헤더 설정
     const headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     };
 
-    // OPTIONS 요청 처리 (CORS 프리플라이트)
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 200,
@@ -29,50 +27,59 @@ exports.handler = async (event, context) => {
         };
     }
 
-    const references = event.queryStringParameters.references.split(',');
-    const queries = references.map(ref => {
-        const match = ref.match(/^\[(\D+)(\d+)(?::(\d+)(?:-(\d+))?)?\]$/);
-        if (!match) return null;
+    const references = event.queryStringParameters.references;
 
-        const short_label = match[1];
-        const chapter = parseInt(match[2], 10);
-        const startParagraph = match[3] ? parseInt(match[3], 10) : null;
-        const endParagraph = match[4] ? parseInt(match[4], 10) : startParagraph;
-
-        return { short_label, chapter, startParagraph, endParagraph };
-    });
-
-    if (queries.some(q => q === null)) {
+    if (!references) {
         return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: '잘못된 참조 형식' })
+            body: JSON.stringify({ error: 'Missing references parameter' })
+        };
+    }
+
+    const referencesArray = references.split(',').map(ref => ref.trim());
+
+    if (referencesArray.length === 0) {
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Empty references array' })
         };
     }
 
     try {
-        const results = await Promise.all(queries.map(async ({ short_label, chapter, startParagraph, endParagraph }) => {
-            let sql, params;
-
-            if (startParagraph === null) {
-                sql = `
-                    SELECT chapter, paragraph, sentence, long_label 
-                    FROM bible2 
-                    WHERE short_label = ? AND chapter = ?
-                    ORDER BY paragraph
-                `;
-                params = [short_label, chapter];
-            } else {
-                sql = `
-                    SELECT chapter, paragraph, sentence, long_label 
-                    FROM bible2 
-                    WHERE short_label = ? AND chapter = ? AND paragraph BETWEEN ? AND ?
-                    ORDER BY paragraph
-                `;
-                params = [short_label, chapter, startParagraph, endParagraph];
+        const results = await Promise.all(referencesArray.map(async (ref) => {
+            const match = ref.match(/^\[(\D+)(\d+)(?::(\d+)(?:-(\d+))?)?\]$/);
+            if (!match) {
+                return { error: 'Invalid reference format' };
             }
 
+            const short_label = match[1];
+            const chapter = parseInt(match[2], 10);
+            const startParagraph = match[3] ? parseInt(match[3], 10) : null;
+            const endParagraph = match[4] ? parseInt(match[4], 10) : startParagraph;
+
             return new Promise((resolve, reject) => {
+                let sql, params;
+
+                if (startParagraph === null) {
+                    sql = `
+                        SELECT chapter, paragraph, sentence, long_label 
+                        FROM bible2 
+                        WHERE short_label = ? AND chapter = ?
+                        ORDER BY paragraph
+                    `;
+                    params = [short_label, chapter];
+                } else {
+                    sql = `
+                        SELECT chapter, paragraph, sentence, long_label 
+                        FROM bible2 
+                        WHERE short_label = ? AND chapter = ? AND paragraph BETWEEN ? AND ?
+                        ORDER BY paragraph
+                    `;
+                    params = [short_label, chapter, startParagraph, endParagraph];
+                }
+
                 db.all(sql, params, (err, rows) => {
                     if (err) {
                         reject(err);

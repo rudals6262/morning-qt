@@ -1,27 +1,20 @@
-const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
+
 const db = new sqlite3.Database('bible.db');
 
-const sqlFile = 'bible2.sql'; // SQL 파일 이름
+db.serialize(() => {
+    db.all("SELECT * FROM bible_table", (err, rows) => { bible
+        if (err) {
+            console.error(err.message);
+            return;
+        }
 
-fs.readFile(sqlFile, 'utf8', (err, data) => {
-    if (err) {
-        console.error('Error reading SQL file:', err);
-        return;
-    }
-
-    const sqliteData = data.replace(/SET [^;]+;/g, '')
-                           .replace(/\/\*[^*]*\*\/\s*/g, '');
-
-    db.serialize(() => {
-        db.run('PRAGMA foreign_keys=OFF;');
-        db.exec(sqliteData, (err) => {
-            if (err) {
-                console.error('Error executing SQL:', err);
-            } else {
-                console.log('Database setup complete.');
-            }
-            db.close();
-        });
+        // JSON 파일로 변환
+        const jsonData = JSON.stringify(rows, null, 2);
+        fs.writeFileSync('bible.json', jsonData);
+        console.log('Data has been written to bible.json');
     });
 });
+
+db.close();
